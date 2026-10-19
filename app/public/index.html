@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hệ thống Quản lý Đặt phòng Khách sạn - Đề 6</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { background-color: #f1f5f9; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    .stat-card { border: none; border-radius: 12px; transition: transform 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .stat-card:hover { transform: translateY(-3px); }
+    .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .room-badge-AVAILABLE { background-color: #10b981; color: white; }
+    .room-badge-OCCUPIED { background-color: #ef4444; color: white; }
+    .room-badge-MAINTENANCE { background-color: #f59e0b; color: white; }
+    .room-box {
+      border-radius: 8px; padding: 12px; text-align: center; font-weight: bold;
+      transition: all 0.2s; cursor: pointer; color: white;
+    }
+    .room-box:hover { opacity: 0.9; transform: scale(1.05); }
+    .nav-pills .nav-link { border-radius: 8px; font-weight: 600; padding: 10px 18px; color: #64748b; }
+    .nav-pills .nav-link.active { background-color: #2563eb; color: white; }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR VỚI ĐĂNG KÝ / ĐĂNG NHẬP -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm py-2">
+    <div class="container-fluid px-4">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+        <i class="fa-solid fa-hotel text-warning fs-4"></i>
+        <span class="fw-bold">GRAND HOTEL <small class="fw-normal text-muted fs-6">| Đặt phòng Khách sạn (Đề 6)</small></span>
+      </a>
+      
+      <div class="d-flex align-items-center gap-3">
+        <span id="dbBadge" class="badge bg-secondary px-3 py-2 fs-6">
+          <i class="fa-solid fa-spinner fa-spin me-1"></i> Kiểm tra DB...
+        </span>
+
+        <div id="authSection">
+          <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#authModal">
+            <i class="fa-solid fa-right-to-bracket me-1"></i> Đăng Nhập / Đăng Ký
+          </button>
+        </div>
+
+        <button class="btn btn-sm btn-outline-light" onclick="refreshCurrentTab()">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- BODY CONTENT -->
+  <div class="container-fluid px-4 py-4">
+    
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm" id="mainTab" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-dashboard">
+          <i class="fa-solid fa-chart-pie me-2"></i> Tổng Quan & Sơ Đồ Phòng
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-bookings">
+          <i class="fa-solid fa-calendar-check me-2"></i> Quản Lý Đặt Phòng
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-rooms">
+          <i class="fa-solid fa-door-open me-2"></i> Danh Sách Phòng
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-customers">
+          <i class="fa-solid fa-users me-2"></i> Khách Hàng
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="mainTabContent">
+      
+      <!-- 1. TAB DASHBOARD -->
+      <div class="tab-pane fade show active" id="tab-dashboard">
+        <div class="row g-3 mb-4">
+          <div class="col-md-3">
+            <div class="card stat-card p-3 bg-white border-start border-4 border-success">
+              <div class="text-muted small fw-semibold">PHÒNG CÒN TRỐNG</div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <h2 class="fw-bold text-success mb-0" id="dashAvailableRooms">0</h2>
+                <i class="fa-solid fa-bed text-success opacity-50 fs-2"></i>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card stat-card p-3 bg-white border-start border-4 border-danger">
+              <div class="text-muted small fw-semibold">ĐANG CÓ KHÁCH (LẤP ĐẦY)</div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <h2 class="fw-bold text-danger mb-0" id="dashOccupiedRooms">0</h2>
+                <span class="badge bg-danger-subtle text-danger fs-6" id="dashOccupancyRate">0%</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card stat-card p-3 bg-white border-start border-4 border-primary">
+              <div class="text-muted small fw-semibold">TỔNG DOANH THU</div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <h3 class="fw-bold text-primary mb-0" id="dashRevenue">0 đ</h3>
+                <i class="fa-solid fa-sack-dollar text-primary opacity-50 fs-2"></i>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card stat-card p-3 bg-white border-start border-4 border-warning">
+              <div class="text-muted small fw-semibold">TỔNG ĐƠN ĐẶT PHÒNG</div>
+              <div class="d-flex justify-content-between align-items-center mt-2">
+                <h2 class="fw-bold text-warning mb-0" id="dashTotalBookings">0</h2>
+                <i class="fa-solid fa-receipt text-warning opacity-50 fs-2"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card p-4 mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0"><i class="fa-solid fa-cubes me-2 text-primary"></i> Sơ Đồ Trạng Thái Phòng Thời Gian Thực</h5>
+            <div class="d-flex gap-3 small">
+              <span><span class="badge room-badge-AVAILABLE px-2 py-1"></span> Trống</span>
+              <span><span class="badge room-badge-OCCUPIED px-2 py-1"></span> Đang ở</span>
+              <span><span class="badge room-badge-MAINTENANCE px-2 py-1"></span> Bảo trì</span>
+            </div>
+          </div>
+          <div id="floorPlanGrid" class="row g-3"></div>
+        </div>
+      </div>
+
+      <!-- 2. TAB BOOKINGS -->
+      <div class="tab-pane fade" id="tab-bookings">
+        <div class="card p-4">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 align-items-center">
+              <h5 class="fw-bold mb-0"><i class="fa-solid fa-list-check me-2 text-primary"></i> Danh Sách Đơn Đặt Phòng</h5>
+              <select id="bookingFilterStatus" class="form-select form-select-sm" style="width: 170px;" onchange="loadBookings()">
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="CONFIRMED">Đã xác nhận</option>
+                <option value="CHECKED_IN">Đang ở</option>
+                <option value="CHECKED_OUT">Đã hoàn thành</option>
+                <option value="CANCELLED">Đã hủy</option>
+              </select>
+            </div>
+            <button class="btn btn-primary fw-bold" data-bs-toggle="modal" data-bs-target="#newBookingModal">
+              <i class="fa-solid fa-plus me-1"></i> Tạo Đơn Đặt Phòng
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Khách hàng</th>
+                  <th>Phòng</th>
+                  <th>Thời gian lưu trú</th>
+                  <th>Tổng tiền</th>
+                  <th>Trạng thái</th>
+                  <th class="text-end">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="bookingsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. TAB ROOMS -->
+      <div class="tab-pane fade" id="tab-rooms">
+        <div class="card p-4">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 align-items-center">
+              <h5 class="fw-bold mb-0"><i class="fa-solid fa-door-closed me-2 text-primary"></i> Danh Sách Phòng</h5>
+              <select id="roomFilterStatus" class="form-select form-select-sm" style="width: 160px;" onchange="loadRooms()">
+                <option value="ALL">Tất cả</option>
+                <option value="AVAILABLE">Còn trống</option>
+                <option value="OCCUPIED">Đang ở</option>
+                <option value="MAINTENANCE">Bảo trì</option>
+              </select>
+            </div>
+            <button class="btn btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#newRoomModal">
+              <i class="fa-solid fa-plus me-1"></i> Thêm Phòng
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Số phòng</th>
+                  <th>Hạng phòng</th>
+                  <th>Tầng</th>
+                  <th>Giá / Đêm</th>
+                  <th>Trạng thái</th>
+                  <th>Mô tả</th>
+                  <th class="text-end">Đổi trạng thái</th>
+                </tr>
+              </thead>
+              <tbody id="roomsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. TAB CUSTOMERS -->
+      <div class="tab-pane fade" id="tab-customers">
+        <div class="card p-4">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="d-flex gap-2 align-items-center">
+              <h5 class="fw-bold mb-0"><i class="fa-solid fa-id-card me-2 text-primary"></i> Danh Sách Khách Hàng</h5>
+              <div class="input-group input-group-sm" style="width: 250px;">
+                <input type="text" id="customerSearchInput" class="form-control" placeholder="Tìm tên, SĐT, CCCD..." onkeyup="searchCustomers()">
+                <button class="btn btn-outline-secondary" onclick="searchCustomers()"><i class="fa-solid fa-search"></i></button>
+              </div>
+            </div>
+            <button class="btn btn-dark fw-bold" data-bs-toggle="modal" data-bs-target="#newCustomerModal">
+              <i class="fa-solid fa-user-plus me-1"></i> Thêm Khách Hàng
+            </button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>#ID</th>
+                  <th>Họ và tên</th>
+                  <th>Điện thoại</th>
+                  <th>Số CCCD</th>
+                  <th>Email</th>
+                  <th>Địa chỉ</th>
+                </tr>
+              </thead>
+              <tbody id="customersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL ĐĂNG NHẬP / ĐĂNG KÝ -->
+  <div class="modal fade" id="authModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <ul class="nav nav-pills" id="authTabs" role="tablist">
+            <li class="nav-item">
+              <button class="nav-link active text-white" data-bs-toggle="pill" data-bs-target="#auth-login-pane">
+                <i class="fa-solid fa-right-to-bracket me-1"></i> Đăng Nhập
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link text-white" data-bs-toggle="pill" data-bs-target="#auth-reg-pane">
+                <i class="fa-solid fa-user-plus me-1"></i> Đăng Ký Tài Khoản
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="tab-content">
+            
+            <div class="tab-pane fade show active" id="auth-login-pane">
+              <form id="loginForm">
+                <div class="mb-3">
+                  <label class="form-label fw-bold">Tên đăng nhập</label>
+                  <input type="text" id="loginUsername" class="form-control" placeholder="admin hoặc khachhang1" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-bold">Mật khẩu</label>
+                  <input type="password" id="loginPassword" class="form-control" placeholder="Mật khẩu" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-bold mb-3">Đăng Nhập Ngay</button>
+
+                <div class="p-2 bg-light rounded text-center small border">
+                  <span class="text-muted d-block mb-1">Tài khoản thử nghiệm nhanh:</span>
+                  <button type="button" class="btn btn-xs btn-outline-dark me-1" onclick="quickFillLogin('admin', 'admin123')">Admin</button>
+                  <button type="button" class="btn btn-xs btn-outline-secondary me-1" onclick="quickFillLogin('khachhang1', '123456')">Khách 1</button>
+                  <button type="button" class="btn btn-xs btn-outline-danger" onclick="quickFillLogin('hacker', 'wrongpass')">Thử Đăng Nhập Sai (Sinh log cảnh báo)</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="tab-pane fade" id="auth-reg-pane">
+              <form id="registerForm">
+                <div class="mb-2">
+                  <label class="form-label small fw-bold">Tên đăng nhập</label>
+                  <input type="text" id="regUsername" class="form-control" placeholder="user_moi" required>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small fw-bold">Mật khẩu</label>
+                  <input type="password" id="regPassword" class="form-control" placeholder="Mật khẩu bí mật" required>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label small fw-bold">Họ và tên</label>
+                  <input type="text" id="regFullName" class="form-control" placeholder="Nguyễn Văn B" required>
+                </div>
+                <div class="row mb-3">
+                  <div class="col-6">
+                    <label class="form-label small fw-bold">Số điện thoại</label>
+                    <input type="text" id="regPhone" class="form-control" placeholder="0988776655">
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label small fw-bold">Số CCCD / Hộ chiếu</label>
+                    <input type="text" id="regIdCard" class="form-control" placeholder="079205009988">
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-success w-100 fw-bold">Đăng Ký & Tạo Hồ Sơ</button>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL TẠO ĐẶT PHÒNG -->
+  <div class="modal fade" id="newBookingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-calendar-plus me-2"></i> Tạo Đơn Đặt Phòng Mới</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="bookingModalForm">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Chọn Khách Hàng</label>
+              <select id="modalBookingCustomer" class="form-select" required></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Chọn Phòng</label>
+              <select id="modalBookingRoom" class="form-select" required onchange="calculateBookingTotal()"></select>
+            </div>
+            <div class="row mb-3">
+              <div class="col-6">
+                <label class="form-label fw-bold">Ngày nhận phòng</label>
+                <input type="date" id="modalBookingCheckIn" class="form-control" required onchange="calculateBookingTotal()">
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold">Ngày trả phòng</label>
+                <input type="date" id="modalBookingCheckOut" class="form-control" required onchange="calculateBookingTotal()">
+              </div>
+            </div>
+            <div class="p-3 bg-light rounded-3 mb-3 border">
+              <div class="d-flex justify-content-between mb-1">
+                <span>Số đêm lưu trú:</span>
+                <span id="modalBookingDays" class="fw-bold">1 đêm</span>
+              </div>
+              <div class="d-flex justify-content-between text-danger fs-5 fw-bold">
+                <span>Tổng tiền tạm tính:</span>
+                <span id="modalBookingTotal">0 đ</span>
+              </div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Ghi chú</label>
+              <input type="text" id="modalBookingNote" class="form-control" placeholder="Yêu cầu thêm...">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button type="submit" class="btn btn-primary fw-bold">Xác Nhận Đặt Phòng</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THÊM PHÒNG -->
+  <div class="modal fade" id="newRoomModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-plus me-2"></i> Thêm Phòng Mới</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="roomModalForm">
+          <div class="modal-body">
+            <div class="row mb-3">
+              <div class="col-6">
+                <label class="form-label fw-bold">Số phòng</label>
+                <input type="text" id="modalRoomNumber" class="form-control" placeholder="VD: 205" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold">Tầng</label>
+                <input type="number" id="modalRoomFloor" class="form-control" value="2" required>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Hạng phòng</label>
+              <select id="modalRoomType" class="form-select" required>
+                <option value="Standard Single">Standard Single</option>
+                <option value="Standard Double">Standard Double</option>
+                <option value="Superior City View">Superior City View</option>
+                <option value="Deluxe Ocean View">Deluxe Ocean View</option>
+                <option value="Family Suite">Family Suite</option>
+                <option value="Presidential VIP">Presidential VIP</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold">Giá 1 đêm (VNĐ)</label>
+              <input type="number" id="modalRoomPrice" class="form-control" placeholder="VD: 850000" required>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Mô tả tiện nghi</label>
+              <textarea id="modalRoomDesc" class="form-control" rows="2" placeholder="Tiện nghi..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button type="submit" class="btn btn-success fw-bold">Lưu Phòng Mới</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL THÊM KHÁCH HÀNG -->
+  <div class="modal fade" id="newCustomerModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-dark text-white">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-user-plus me-2"></i> Thêm Khách Hàng Mới</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="customerModalForm">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label fw-bold">Họ và tên khách</label>
+              <input type="text" id="modalCustName" class="form-control" placeholder="Nguyễn Văn A" required>
+            </div>
+            <div class="row mb-3">
+              <div class="col-6">
+                <label class="form-label fw-bold">Số điện thoại</label>
+                <input type="text" id="modalCustPhone" class="form-control" placeholder="0901234567" required>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-bold">Số CCCD / Hộ chiếu</label>
+                <input type="text" id="modalCustIdCard" class="form-control" placeholder="079205001234" required>
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" id="modalCustEmail" class="form-control" placeholder="khachhang@gmail.com">
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Địa chỉ</label>
+              <input type="text" id="modalCustAddress" class="form-control" placeholder="TP. Hồ Chí Minh">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+            <button type="submit" class="btn btn-dark fw-bold">Lưu Thông Tin</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    const formatVND = (n) => Number(n).toLocaleString('vi-VN') + ' đ';
+    let currentUser = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+      document.getElementById('modalBookingCheckIn').value = today;
+      document.getElementById('modalBookingCheckOut').value = tomorrow;
+
+      const savedUser = sessionStorage.getItem('currentUser');
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        updateAuthUI();
+      }
+
+      checkHealth();
+      loadDashboard();
+      loadRooms();
+      loadCustomers();
+      loadBookings();
+    });
+
+    function refreshCurrentTab() {
+      checkHealth();
+      loadDashboard();
+      loadRooms();
+      loadCustomers();
+      loadBookings();
+    }
+
+    function updateAuthUI() {
+      const authDiv = document.getElementById('authSection');
+      if (currentUser) {
+        authDiv.innerHTML = `
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="fa-solid fa-user-circle me-1 text-warning"></i>
+              <span>${currentUser.full_name}</span>
+              <span class="badge bg-primary ms-1">${currentUser.role}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow">
+              <li><span class="dropdown-item-text text-muted small">@${currentUser.username}</span></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item text-danger" href="#" onclick="logout()"><i class="fa-solid fa-right-from-bracket me-1"></i> Đăng xuất</a></li>
+            </ul>
+          </div>
+        `;
+      } else {
+        authDiv.innerHTML = `
+          <button class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#authModal">
+            <i class="fa-solid fa-right-to-bracket me-1"></i> Đăng Nhập / Đăng Ký
+          </button>
+        `;
+      }
+    }
+
+    function quickFillLogin(u, p) {
+      document.getElementById('loginUsername').value = u;
+      document.getElementById('loginPassword').value = p;
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentUser = data.user;
+          sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+          updateAuthUI();
+          bootstrap.Modal.getInstance(document.getElementById('authModal')).hide();
+          alert(`Xin chào, ${currentUser.full_name}! Đăng nhập thành công.`);
+        } else {
+          alert(' ' + data.error);
+        }
+      } catch (err) {
+        alert('Lỗi kết nối máy chủ!');
+      }
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        username: document.getElementById('regUsername').value,
+        password: document.getElementById('regPassword').value,
+        full_name: document.getElementById('regFullName').value,
+        phone: document.getElementById('regPhone').value,
+        id_card: document.getElementById('regIdCard').value
+      };
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentUser = data.user;
+          sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+          updateAuthUI();
+          bootstrap.Modal.getInstance(document.getElementById('authModal')).hide();
+          alert(' Đăng ký tài khoản thành công!');
+          refreshCurrentTab();
+        } else {
+          alert(' ' + data.error);
+        }
+      } catch (err) {
+        alert('Lỗi kết nối!');
+      }
+    });
+
+    function logout() {
+      currentUser = null;
+      sessionStorage.removeItem('currentUser');
+      updateAuthUI();
+    }
+
+    async function checkHealth() {
+      const badge = document.getElementById('dbBadge');
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        if (data.db_connected) {
+          badge.className = 'badge bg-success px-3 py-2 fs-6';
+          badge.innerHTML = '<i class="fa-solid fa-circle-check me-1"></i> PostgreSQL Connected';
+        } else throw new Error();
+      } catch (e) {
+        badge.className = 'badge bg-danger px-3 py-2 fs-6';
+        badge.innerHTML = '<i class="fa-solid fa-circle-xmark me-1"></i> Mất kết nối DB';
+      }
+    }
+
+    async function loadDashboard() {
+      try {
+        const res = await fetch('/api/dashboard/stats');
+        const stats = await res.json();
+
+        document.getElementById('dashAvailableRooms').textContent = stats.rooms.available;
+        document.getElementById('dashOccupiedRooms').textContent = `${stats.rooms.occupied} / ${stats.rooms.total}`;
+        document.getElementById('dashOccupancyRate').textContent = `${stats.rooms.occupancy_rate}%`;
+        document.getElementById('dashRevenue').textContent = formatVND(stats.revenue);
+        document.getElementById('dashTotalBookings').textContent = stats.bookings;
+
+        const roomsRes = await fetch('/api/rooms');
+        const rooms = await roomsRes.json();
+        renderFloorPlan(rooms);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderFloorPlan(rooms) {
+      const grid = document.getElementById('floorPlanGrid');
+      grid.innerHTML = rooms.map(r => {
+        let badgeClass = `room-badge-${r.status}`;
+        let statusText = r.status === 'AVAILABLE' ? 'Trống' : (r.status === 'OCCUPIED' ? 'Đang ở' : 'Bảo trì');
+        return `
+          <div class="col-6 col-md-4 col-lg-2">
+            <div class="room-box ${badgeClass}" onclick="quickChangeStatus(${r.id}, '${r.status}')" title="${r.room_type} - ${formatVND(r.price_per_night)}/đêm">
+              <div class="fs-5">P.${r.room_number}</div>
+              <div class="small fw-normal">${r.room_type.split(' ')[0]}</div>
+              <div class="small badge bg-dark bg-opacity-25 mt-1">${statusText}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function quickChangeStatus(id, current) {
+      const nextStatus = current === 'AVAILABLE' ? 'MAINTENANCE' : 'AVAILABLE';
+      if (confirm(`Bạn muốn chuyển phòng này sang "${nextStatus === 'AVAILABLE' ? 'Còn trống' : 'Bảo trì'}"?`)) {
+        await fetch(`/api/rooms/${id}/status`, {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ status: nextStatus })
+        });
+        refreshCurrentTab();
+      }
+    }
+
+    async function loadRooms() {
+      const status = document.getElementById('roomFilterStatus').value;
+      const res = await fetch(`/api/rooms?status=${status}`);
+      const rooms = await res.json();
+
+      const tbody = document.getElementById('roomsTableBody');
+      tbody.innerHTML = rooms.map(r => `
+        <tr>
+          <td class="fw-bold fs-6">Phòng ${r.room_number}</td>
+          <td><span class="badge bg-light text-dark border">${r.room_type}</span></td>
+          <td>Tầng ${r.floor || 1}</td>
+          <td class="fw-bold text-primary">${formatVND(r.price_per_night)}</td>
+          <td><span class="badge room-badge-${r.status}">${r.status}</span></td>
+          <td class="small text-muted">${r.description || ''}</td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-success" onclick="updateRoomStatus(${r.id}, 'AVAILABLE')">Trống</button>
+              <button class="btn btn-outline-warning" onclick="updateRoomStatus(${r.id}, 'MAINTENANCE')">Bảo trì</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      const select = document.getElementById('modalBookingRoom');
+      select.innerHTML = rooms.filter(r => r.status !== 'MAINTENANCE').map(r => `
+        <option value="${r.id}" data-price="${r.price_per_night}">
+          Phòng ${r.room_number} - ${r.room_type} (${formatVND(r.price_per_night)}/đêm) [${r.status}]
+        </option>
+      `).join('');
+      calculateBookingTotal();
+    }
+
+    async function updateRoomStatus(id, status) {
+      await fetch(`/api/rooms/${id}/status`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ status })
+      });
+      refreshCurrentTab();
+    }
+
+    async function loadCustomers(search = '') {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(search)}`);
+      const customers = await res.json();
+
+      const tbody = document.getElementById('customersTableBody');
+      tbody.innerHTML = customers.map(c => `
+        <tr>
+          <td>#${c.id}</td>
+          <td class="fw-bold">${c.full_name}</td>
+          <td><i class="fa-solid fa-phone text-muted me-1"></i>${c.phone}</td>
+          <td><code>${c.id_card}</code></td>
+          <td>${c.email || ''}</td>
+          <td class="small">${c.address || ''}</td>
+        </tr>
+      `).join('');
+
+      const select = document.getElementById('modalBookingCustomer');
+      select.innerHTML = customers.map(c => `
+        <option value="${c.id}">${c.full_name} - SĐT: ${c.phone} (${c.id_card})</option>
+      `).join('');
+    }
+
+    function searchCustomers() {
+      const q = document.getElementById('customerSearchInput').value;
+      loadCustomers(q);
+    }
+
+    async function loadBookings() {
+      const status = document.getElementById('bookingFilterStatus').value;
+      const res = await fetch(`/api/bookings?status=${status}`);
+      const bookings = await res.json();
+
+      const tbody = document.getElementById('bookingsTableBody');
+      tbody.innerHTML = bookings.map(b => {
+        let statusBadge = '';
+        let actionButtons = '';
+
+        if (b.booking_status === 'CONFIRMED') {
+          statusBadge = '<span class="badge bg-warning text-dark">Đã xác nhận</span>';
+          actionButtons = `
+            <button class="btn btn-sm btn-success" onclick="bookingCheckIn(${b.id})" title="Nhận phòng">
+              <i class="fa-solid fa-key me-1"></i> Nhận phòng
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="bookingCancel(${b.id})" title="Hủy">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          `;
+        } else if (b.booking_status === 'CHECKED_IN') {
+          statusBadge = '<span class="badge bg-danger">Đang ở</span>';
+          actionButtons = `
+            <button class="btn btn-sm btn-primary" onclick="bookingCheckOut(${b.id})" title="Trả phòng">
+              <i class="fa-solid fa-arrow-right-from-bracket me-1"></i> Trả phòng
+            </button>
+          `;
+        } else if (b.booking_status === 'CHECKED_OUT') {
+          statusBadge = '<span class="badge bg-secondary">Hoàn thành</span>';
+        } else {
+          statusBadge = '<span class="badge bg-light text-muted border">Đã hủy</span>';
+        }
+
+        return `
+          <tr>
+            <td><span class="badge bg-dark">#BK${b.id}</span></td>
+            <td>
+              <div class="fw-bold">${b.full_name}</div>
+              <small class="text-muted"><i class="fa-solid fa-phone me-1"></i>${b.phone}</small>
+            </td>
+            <td>
+              <span class="badge bg-primary">P.${b.room_number}</span> 
+              <small class="text-muted">${b.room_type}</small>
+            </td>
+            <td>
+              <div class="small fw-semibold">${b.check_in.slice(0,10)} &rarr; ${b.check_out.slice(0,10)}</div>
+            </td>
+            <td class="fw-bold text-danger">${formatVND(b.total_price)}</td>
+            <td>${statusBadge}</td>
+            <td class="text-end">${actionButtons}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function bookingCheckIn(id) {
+      if (confirm('Xác nhận khách nhận phòng?')) {
+        await fetch(`/api/bookings/${id}/checkin`, { method: 'PUT' });
+        refreshCurrentTab();
+      }
+    }
+    async function bookingCheckOut(id) {
+      if (confirm('Xác nhận khách trả phòng và thanh toán?')) {
+        await fetch(`/api/bookings/${id}/checkout`, { method: 'PUT' });
+        refreshCurrentTab();
+      }
+    }
+    async function bookingCancel(id) {
+      if (confirm('Hủy đơn đặt phòng này?')) {
+        await fetch(`/api/bookings/${id}/cancel`, { method: 'PUT' });
+        refreshCurrentTab();
+      }
+    }
+
+    function calculateBookingTotal() {
+      const roomSelect = document.getElementById('modalBookingRoom');
+      if (!roomSelect.selectedOptions[0]) return;
+      const price = parseFloat(roomSelect.selectedOptions[0].getAttribute('data-price') || 0);
+      const checkIn = new Date(document.getElementById('modalBookingCheckIn').value);
+      const checkOut = new Date(document.getElementById('modalBookingCheckOut').value);
+      
+      const diffTime = checkOut - checkIn;
+      const days = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+      document.getElementById('modalBookingDays').textContent = `${days} đêm`;
+      document.getElementById('modalBookingTotal').textContent = formatVND(price * days);
+    }
+
+    document.getElementById('bookingModalForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          customer_id: document.getElementById('modalBookingCustomer').value,
+          room_id: document.getElementById('modalBookingRoom').value,
+          check_in: document.getElementById('modalBookingCheckIn').value,
+          check_out: document.getElementById('modalBookingCheckOut').value,
+          note: document.getElementById('modalBookingNote').value
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('newBookingModal')).hide();
+        refreshCurrentTab();
+        alert(' Đặt phòng thành công! Dữ liệu đã được nạp vào Prometheus và Loki.');
+      } else {
+        alert(data.error);
+      }
+    });
+
+    document.getElementById('roomModalForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/api/rooms', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          room_number: document.getElementById('modalRoomNumber').value,
+          floor: document.getElementById('modalRoomFloor').value,
+          room_type: document.getElementById('modalRoomType').value,
+          price_per_night: document.getElementById('modalRoomPrice').value,
+          description: document.getElementById('modalRoomDesc').value
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('newRoomModal')).hide();
+        e.target.reset();
+        refreshCurrentTab();
+      } else alert(data.error);
+    });
+
+    document.getElementById('customerModalForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          full_name: document.getElementById('modalCustName').value,
+          phone: document.getElementById('modalCustPhone').value,
+          id_card: document.getElementById('modalCustIdCard').value,
+          email: document.getElementById('modalCustEmail').value,
+          address: document.getElementById('modalCustAddress').value
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('newCustomerModal')).hide();
+        e.target.reset();
+        refreshCurrentTab();
+      } else alert(data.error);
+    });
+  </script>
+</body>
+</html>
