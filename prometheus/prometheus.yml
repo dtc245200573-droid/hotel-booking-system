@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'hotel_web_app'
+    static_configs:
+      - targets: ['hotel_app:3000']
+
+  - job_name: 'nginx_server'
+    static_configs:
+      - targets: ['nginx_exporter:9113']
+
+  - job_name: 'postgresql_db'
+    static_configs:
+      - targets: ['postgres_exporter:9187']
+
+  - job_name: 'docker_containers'
+    static_configs:
+      - targets: ['cadvisor:8080']
