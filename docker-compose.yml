@@ -1,0 +1,203 @@
+services:
+  # 1. Cơ sở dữ liệu PostgreSQL
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hotel_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KhachSan_2026_StrongPass99!}
+      POSTGRES_DB: ${POSTGRES_DB:-hotel_booking_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hotel_admin} -d ${POSTGRES_DB:-hotel_booking_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # 2. Quản trị cơ sở dữ liệu pgAdmin 4
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@hotel.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-PgAdmin_2026_Secure99!}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - backend_net
+      - frontend_net
+    security_opt:
+      - no-new-privileges:true
+
+  # 3. Ứng dụng Web Đặt phòng Khách sạn
+  hotel_app:
+    build: ./app
+    container_name: hotel_app
+    restart: unless-stopped
+    environment:
+      APP_PORT: 3000
+      DB_HOST: postgres_db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-hotel_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-KhachSan_2026_StrongPass99!}
+      POSTGRES_DB: ${POSTGRES_DB:-hotel_booking_db}
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # 4. Nginx Reverse Proxy (HTTPS + Security Headers)
+  nginx_proxy:
+    image: nginx:1.25-alpine
+    container_name: nginx_proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - hotel_app
+    networks:
+      - frontend_net
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  # 5. Các Exporters thu thập metrics cho Prometheus
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:1.1.0
+    container_name: nginx_exporter
+    restart: unless-stopped
+    command:
+      - "-nginx.scrape-uri=http://nginx_proxy:80/nginx_status"
+    depends_on:
+      - nginx_proxy
+    networks:
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://monitoring_user:Monitor_2026_ReadOnly99!@postgres_db:5432/${POSTGRES_DB:-hotel_booking_db}?sslmode=disable"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - backend_net
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring_net
+
+  # 6. Prometheus & Grafana
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-Grafana_2026_Monitor99!}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  # 7. Loki & Promtail (Log tập trung)
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring_net
+    security_opt:
+      - no-new-privileges:true
+
+  promtail:
+    image: grafana/promtail:2.9.6
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring_net
+
+networks:
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+    internal: true
+  monitoring_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  grafana_data:
+  loki_data:
